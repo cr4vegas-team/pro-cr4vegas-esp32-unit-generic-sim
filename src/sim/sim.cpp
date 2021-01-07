@@ -23,7 +23,8 @@
 // #define TINY_GSM_MODEM_SEQUANS_MONARCH
 
 #define PIN_RESET_SIM 21
-#define PIN_LED 25
+#define PIN_LED_VERDE 23
+#define PIN_LED_ROJO 22
 
 // Set serial for AT commands (to the module)
 // Use Hardware Serial on Mega, Leonardo, Micro
@@ -114,7 +115,7 @@ const char *UNIT_GENERIC_ID = "ug1";
 const uint8_t NET_GPRS_ATTEMPTS_MAX = 3;
 const uint16_t MQTT_RECONNECT_ATTEMPTS_MAX = 5;
 const uint32_t RECCONECT_TIME = 10000;
-uint32_t PUBLISH_DATA_SPEED = 1;
+uint32_t PUBLISH_DATA_SPEED = 600000;
 
 // ==================================================
 //  TODO Varaibles de tiempos
@@ -173,7 +174,8 @@ void setupSIM(TickType_t &xLastWakeTimeP)
     xLastWakeTime = xLastWakeTimeP;
     SerialMon.println("setupSim()");
     pinMode(PIN_RESET_SIM, OUTPUT);
-    pinMode(PIN_LED, OUTPUT);
+    pinMode(PIN_LED_VERDE, OUTPUT);
+    pinMode(PIN_LED_ROJO, OUTPUT);
 
     mqtt.setServer(broker, 1883);
     mqtt.setCallback(mqttCallback);
@@ -219,7 +221,9 @@ void initSIM()
     {
         SerialAT.end();
 
-        digitalWrite(PIN_LED, LOW);
+        digitalWrite(PIN_LED_ROJO, HIGH);
+        digitalWrite(PIN_LED_VERDE, LOW);
+
         SerialMon.println("initSIM() --> wait...");
 
         digitalWrite(PIN_RESET_SIM, LOW);
@@ -319,7 +323,10 @@ void initSIM()
 #endif
         vTaskDelayUntil(&xLastWakeTime, 100);
 
-        digitalWrite(PIN_LED, HIGH);
+        digitalWrite(PIN_LED_VERDE, HIGH);
+        digitalWrite(PIN_LED_ROJO, LOW);
+
+        publishedCommunication = false;
     }
 }
 
@@ -434,27 +441,35 @@ void publish()
 {
     long t = millis();
 
-    if (t - lastPublishData >= PUBLISH_DATA_SPEED && getEvent() == 1)
+    if (t - lastPublishData > PUBLISH_DATA_SPEED)
     {
         lastPublishData = t;
-        setEvent(0);
         publishedData = false;
     }
+
+    if (getEvent() == 1) // Siempre que ocure un evento se envía si o si el dato
+    {
+        publishedData = false;
+        setEvent(0);
+    }
+
+    if (!publishedData) // Y en caso de que exista una solicitud se envía también
+    {
+        publishData();
+    }
+
     if (!publishedCommunication)
     {
         publishCommunication();
         publishedCommunication = true;
     }
-    if (!publishedData)
-    {
-        publishData();
-        publishedData = true;
-    }
+
     if (!publishedSIMData)
     {
         publishSIMData();
         publishedSIMData = true;
     }
+
     if (!publishedSendSpeed)
     {
         publishSendSpeed();
@@ -478,10 +493,14 @@ void publishCommunication()
 void publishData()
 {
     String payloadString = "2," + (String)getLectura() + "," + (String)getCaudal();
-    char payloadCharArray[payloadString.length()];
-    payloadString.toCharArray(payloadCharArray, payloadString.length() + 1);
-    mqtt.publish(topicPub, payloadCharArray);
-    publishedData = true;
+    int payloadLength = payloadString.length() + 1;
+    char payloadCharArray[payloadLength];
+    bool retained = true;
+    payloadString.toCharArray(payloadCharArray, payloadLength);
+    if (mqtt.publish(topicPub, payloadCharArray, retained))
+    {
+        publishedData = true;
+    }
 }
 
 // ==================================================

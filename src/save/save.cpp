@@ -1,14 +1,11 @@
 #include <EEPROM.h>
+#include "../main.h"
 
 // ==================================================
 //  Memoria FLASH
 // ==================================================
 uint8_t FLASH_SIZE = 50;
 uint8_t P1_FLASH_POSITION = 0;
-uint8_t P2_FLASH_POSITION = 0;
-uint8_t P3_FLASH_POSITION = 0;
-uint8_t P4_FLASH_POSITION = 0;
-uint8_t P5_FLASH_POSITION = 0;
 
 uint32_t readLectura()
 {
@@ -19,6 +16,7 @@ uint32_t readLectura()
 
 void saveLectura(uint32_t lectura)
 {
+    SerialMon.println("save core: " + (String)xPortGetCoreID());
     EEPROM.begin(FLASH_SIZE);
     EEPROM.writeLong(P1_FLASH_POSITION, lectura);
     EEPROM.commit();

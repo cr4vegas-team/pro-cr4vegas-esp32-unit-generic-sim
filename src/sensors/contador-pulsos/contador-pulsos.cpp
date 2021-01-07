@@ -8,7 +8,7 @@ long t2 = t1;
 long intervalo = 0;
 long intervaloRestar = intervalo;
 
-const int EVENTO_LECTURA = 2;
+const int EVENTO_LECTURA = 1;
 
 void setupPulseCounter()
 {

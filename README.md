@@ -4,6 +4,13 @@
 **Autor:** Rubén Francisco Gazquez Rosales
 **Descripción:** Nodo final para las unidades de control genéricas.
    Su uso es exclusivo para GPRS (NO WIFI).
+   Existen 4 tipos de publicación: comunicación, datos, datos de SIM y velocidad de envío. Solo los
+   son considerados de vital importancia por lo que se realiza un envío "retenido (retained)" hacia
+   el servidor para que persistan y el servidor pueda obtener en cada momento el último estado de los
+   sensores y actuadores. Es la única publicación que se comprueba en el envío y si no fue exitoso,
+   en cada iteración se intenta volver a enviar.
+   El resto de publicaciónes se consideran "en tiempo de solicitud" y su importancia esta en la 
+   comunicación cliente/servidor/nodo en el momento.
 
 ## Librerías
 
