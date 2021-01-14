@@ -1,25 +1,20 @@
-#include "contador-pulsos/contador-pulsos.h"
-#include "temperatura-humedad/temperatura-humedad.h"
+#include "./contador-pulsos/contador-pulsos.h"
 
 // ==================================================
 //  Sensores
 // ==================================================
-uint32_t lectura = 0;
-double caudal = 0;
-byte temperature = 0;
-byte humidity = 0;
+long lectura = 0;
+float caudal = 0;
 int event = 0;
 
 void setupSensors()
 {
-    setupPulseCounter();
-    //setupTEMP();
+    setupContador();
 }
 
 void loopSensors()
 {
-    loopPulseCounter(lectura, caudal, event);
-    //loopTEMP(temperature, humidity);
+    loopContador(lectura, caudal, event);
 }
 
 uint32_t getLectura()
@@ -36,16 +31,6 @@ void setLectura(uint32_t lecturaP)
 double getCaudal()
 {
     return caudal;
-}
-
-uint32_t getTemperature()
-{
-    return temperature;
-}
-
-uint32_t getHumidity()
-{
-    return humidity;
 }
 
 int getEvent()

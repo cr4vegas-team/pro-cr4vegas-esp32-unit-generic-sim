@@ -1,14 +1,13 @@
 #include <Arduino.h>
+#include "debugger/debugger.h"
 #include "sim/sim.h"
 #include "save/save.h"
 #include "sensors/sensors.h"
 
-#define SerialMon Serial
-
 TaskHandle_t taskSensors;
 TaskHandle_t taskSIM;
 
-long timeToSave = 0;
+long lastSave = 0;
 long TIME_TO_SAVE = 600000;
 
 void runTaskSensors(void *pvParameters);
@@ -16,7 +15,10 @@ void runTaskSIM(void *pvParameters);
 
 void setup()
 {
-    SerialMon.begin(115200);
+    setupDebug();
+    setupSave();
+
+    delay(1000);
     xTaskCreatePinnedToCore(runTaskSensors, "Task Sensors", 5120, NULL, 5, &taskSensors, 0);
     delay(1000);
     xTaskCreatePinnedToCore(runTaskSIM, "Task Sim", 10240, NULL, 6, &taskSIM, 1);
@@ -25,54 +27,44 @@ void setup()
 
 void runTaskSIM(void *pvParameters)
 {
-    TickType_t xLastWakeTime;
-    const TickType_t xFrequency = 10;
+    printLNDebug("runTaskSIM running on core: " + (String)xPortGetCoreID());
 
-    // Initialise the xLastWakeTime variable with the current time.
-    xLastWakeTime = xTaskGetTickCount();
-
-    SerialMon.println("runTaskSIM running on core: " + (String)xPortGetCoreID());
-
-    setLectura(readLectura()); // Cargo la lectura desde la flash
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xFrequency = 100;
 
     setupSIM(xLastWakeTime);
-
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
+    // Iteración en el núcleo asignado
     for (;;)
     {
-        // Wait for the next cycle.
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        // Perform action here.
         loopSIM();
 
-        if (getEvent() == 1)
+        long t1 = millis();
+
+        if (t1 - lastSave > TIME_TO_SAVE)
         {
-            saveLectura(getLectura());
-            setEvent(0);
+            lastSave = t1;
+            saveDataOnFlash();
         }
     }
 }
 
 void runTaskSensors(void *pvParameters)
 {
-    TickType_t xLastWakeTime;
+    printLNDebug("runTaskSensors running on core: " + (String)xPortGetCoreID());
+
     const TickType_t xFrequency = 10;
-
-    // Initialise the xLastWakeTime variable with the current time.
-    xLastWakeTime = xTaskGetTickCount();
-
-    SerialMon.println("runTaskSensors running on core: " + (String)xPortGetCoreID());
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     setupSensors();
-
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
+    // Iteración en el núcleo asignado
     for (;;)
     {
-        // Wait for the next cycle.
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        // Perform action here.
         loopSensors();
     }
 }

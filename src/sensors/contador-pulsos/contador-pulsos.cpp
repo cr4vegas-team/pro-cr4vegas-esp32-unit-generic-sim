@@ -1,36 +1,33 @@
 #include <Arduino.h>
 
+const int PIN_CONTADOR = 33; 
+
 int leida = 0;
 double ultimoCaudal = 0.00;
-long ultimaLectura = 0;
 long t1 = millis();
 long t2 = t1;
 long intervalo = 0;
 long intervaloRestar = intervalo;
 
-const int EVENTO_LECTURA = 1;
+const int EVENTO_CAUDAL = 4;
 
-void setupPulseCounter()
+void setupContador()
 {
-    pinMode(34, INPUT);
+    pinMode(PIN_CONTADOR, INPUT);
 }
 
-void loopPulseCounter(uint32_t &lectura, double &caudal, int &event)
+void loopContador(long &lectura, float &caudal, int &event)
 {
     t1 = millis();
-    int lecturaPIN35 = digitalRead(34);
+    int lecturaPIN35 = digitalRead(PIN_CONTADOR);
 
     if (lecturaPIN35 == HIGH)
     {
         if (!leida)
         {
             lectura++;
-            if ((lectura - ultimaLectura) > EVENTO_LECTURA)
-            {
-                event = 1;
-                ultimaLectura = lectura;
-            }
             leida = 1;
+            event = 1;
             // Caudal
             intervalo = (t1 - t2) / 1000;
             if (intervalo != 0)
@@ -52,8 +49,11 @@ void loopPulseCounter(uint32_t &lectura, double &caudal, int &event)
     {
         caudal = round(1000 / intervaloRestar);
     }
+
     if (caudal < 5)
     {
         caudal = 0;
     }
+
+    ultimoCaudal = caudal;
 }

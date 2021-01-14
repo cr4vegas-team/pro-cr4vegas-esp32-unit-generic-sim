@@ -1,4 +1,4 @@
 #include <Arduino.h>
 
-void setupPulseCounter();
-void loopPulseCounter(uint32_t &lectura, double &caudal, int &event);
+void setupContador();
+void loopContador(long &lectura, float &caudal, int &event);

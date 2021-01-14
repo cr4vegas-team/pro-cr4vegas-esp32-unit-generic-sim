@@ -1,4 +1,4 @@
-#include <Arduino.h>
+/* #include <Arduino.h>
 #include <SimpleDHT.h>
 
 #define SENSOR 5
@@ -23,4 +23,4 @@ void loopTEMP(byte &temperature, byte &humidity)
         sensor.read(SENSOR, &temperature, &humidity, data);
         lastSensorRead = t;
     }
-}
+} */

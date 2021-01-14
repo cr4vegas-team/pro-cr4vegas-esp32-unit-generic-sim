@@ -1,5 +1,5 @@
 #include "../sensors/sensors.h"
-#include "../main.h"
+#include "../debugger/debugger.h"
 
 // Select your modem:
 // #define TINY_GSM_MODEM_SIM800
@@ -23,8 +23,7 @@
 // #define TINY_GSM_MODEM_SEQUANS_MONARCH
 
 #define PIN_RESET_SIM 21
-#define PIN_LED_VERDE 23
-#define PIN_LED_ROJO 22
+#define PIN_LED_VERDE 2
 
 // Set serial for AT commands (to the module)
 // Use Hardware Serial on Mega, Leonardo, Micro
@@ -101,10 +100,9 @@ PubSubClient mqtt(client);
 //      - Tópico para publicación
 //      - ID cliente en el servidor MQTT
 // ==================================================
-const char *broker = "cr4v.rubenfgr.com";
-const char *topicSub = "s/u/g/1"; // server/unit/generic/id
-const char *topicPub = "n/u/g/1"; // node/unit/generic/id
-const char *UNIT_GENERIC_ID = "ug1";
+const char *broker = "emqx.rubenfgr.com";
+const char *topicSub = "s/u/g/2"; // server/unit/hydrant/id
+const char *topicPub = "n/u/g/2"; // node/unit/hydrant/id
 
 // ==================================================
 // TODO Constantes
@@ -112,10 +110,10 @@ const char *UNIT_GENERIC_ID = "ug1";
 //      - Velocidad de envio de datos
 //      - Tiempo de espera para volver a intentar conectar
 // ==================================================
-const uint8_t NET_GPRS_ATTEMPTS_MAX = 3;
-const uint16_t MQTT_RECONNECT_ATTEMPTS_MAX = 5;
+const uint16_t MQTT_RECONNECT_ATTEMPTS_MAX = 3;
 const uint32_t RECCONECT_TIME = 10000;
-uint32_t PUBLISH_DATA_SPEED = 600000;
+long PUBLISH_COMMUNICATION_SPEED = 1000 * 60 * 24; // 1000 milisegundos * 60 minutos * 24 horas (1 día en milisegundos)
+long PUBLISH_DATA_SPEED = 600000;
 
 // ==================================================
 //  TODO Varaibles de tiempos
@@ -126,6 +124,7 @@ uint32_t PUBLISH_DATA_SPEED = 600000;
 // ==================================================
 uint32_t lastMQTTReconnectAttempt = 0;
 uint8_t mqttReconnectAttempts = 0;
+long lastPublishCommunication = 0;
 long lastPublishData = 0;
 int ledStatus = LOW;
 
@@ -171,11 +170,11 @@ void publishSendSpeed();
 // ==================================================
 void setupSIM(TickType_t &xLastWakeTimeP)
 {
+    randomSeed(micros());
     xLastWakeTime = xLastWakeTimeP;
-    SerialMon.println("setupSim()");
+    printLNDebug("setupSim()");
     pinMode(PIN_RESET_SIM, OUTPUT);
     pinMode(PIN_LED_VERDE, OUTPUT);
-    pinMode(PIN_LED_ROJO, OUTPUT);
 
     mqtt.setServer(broker, 1883);
     mqtt.setCallback(mqttCallback);
@@ -192,7 +191,7 @@ void loopSIM()
         {
             initSIM();
         }
-        SerialMon.println("=== MQTT NOT CONNECTED ===");
+        printLNDebug("=== MQTT NOT CONNECTED ===");
         // Reconnect every 10 seconds
         uint32_t t = millis();
         if (t - lastMQTTReconnectAttempt > RECCONECT_TIME)
@@ -208,6 +207,7 @@ void loopSIM()
     else
     {
         publish();
+        digitalWrite(PIN_LED_VERDE, HIGH);
     }
 
     mqtt.loop();
@@ -221,30 +221,31 @@ void initSIM()
     {
         SerialAT.end();
 
-        digitalWrite(PIN_LED_ROJO, HIGH);
         digitalWrite(PIN_LED_VERDE, LOW);
 
-        SerialMon.println("initSIM() --> wait...");
+        printLNDebug("initSIM() --> wait...");
 
         digitalWrite(PIN_RESET_SIM, LOW);
-        vTaskDelayUntil(&xLastWakeTime, 2000);
+        vTaskDelayUntil(&xLastWakeTime, 5000);
 
         // Set GSM module baud rate
         //TinyGsmAutoBaud(SerialAT, GSM_AUTOBAUD_MIN, GSM_AUTOBAUD_MAX);
         //SerialAT.begin(115200, SERIAL_8N1, 16, 17, false);
         SerialAT.begin(9600);
-        vTaskDelayUntil(&xLastWakeTime, 10000);
+        vTaskDelayUntil(&xLastWakeTime, 5000);
 
         digitalWrite(PIN_RESET_SIM, HIGH);
 
-        SerialMon.println("modem.init()...");
+        vTaskDelayUntil(&xLastWakeTime, 2000);
+
+        printLNDebug("modem.init()...");
 
         if (!modem.init())
         {
-            SerialMon.println("ERROR!");
+            printLNDebug("ERROR!");
             setupSIM(xLastWakeTime);
         }
-        SerialMon.println("OK!");
+        printLNDebug("OK!");
         vTaskDelayUntil(&xLastWakeTime, 100);
 
 #if TINY_GSM_USE_GPRS
@@ -260,11 +261,11 @@ void initSIM()
         SerialMon.print(F("Setting SSID/password..."));
         if (!modem.networkConnect(wifiSSID, wifiPass))
         {
-            SerialMon.println(" fail");
+            printLNDebug(" fail");
             vTaskDelayUntil(&xLastWakeTime, 10000);
             return;
         }
-        SerialMon.println(" success");
+        printLNDebug(" success");
 #endif
 
 #if TINY_GSM_USE_GPRS && defined TINY_GSM_MODEM_XBEE
@@ -272,24 +273,18 @@ void initSIM()
         modem.gprsConnect(apn, gprsUser, gprsPass);
 #endif
 
-        SerialMon.println("Waiting for network...");
-        uint8_t triesNetwork = 0;
+        printLNDebug("Waiting for network...");
         while (!modem.waitForNetwork())
         {
-            SerialMon.println(" fail!");
-            vTaskDelayUntil(&xLastWakeTime, 10000);
-            if (triesNetwork == NET_GPRS_ATTEMPTS_MAX)
-            {
-                initSIM();
-            }
-            triesNetwork++;
+            printLNDebug(" fail!");
+            initSIM();
         }
-        SerialMon.println(" success!");
+        printLNDebug(" success!");
         vTaskDelayUntil(&xLastWakeTime, 100);
 
         if (modem.isNetworkConnected())
         {
-            SerialMon.println("Network connected!");
+            printLNDebug("Network connected!");
         }
         else
         {
@@ -298,23 +293,17 @@ void initSIM()
 
 #if TINY_GSM_USE_GPRS
         // GPRS connection parameters are usually set after network registration
-        SerialMon.println(("Connecting GPRS to " + (String)apn + "..."));
-        uint8_t triesGPRS = 0;
+        printLNDebug(("Connecting GPRS to " + (String)apn + "..."));
         while (!modem.gprsConnect(apn, gprsUser, gprsPass))
         {
-            SerialMon.println(" fail!");
-            vTaskDelayUntil(&xLastWakeTime, 10000);
-            if (triesGPRS == NET_GPRS_ATTEMPTS_MAX)
-            {
-                initSIM();
-            }
-            triesGPRS++;
+            printLNDebug(" fail!");
+            initSIM();
         }
-        SerialMon.println(" success!");
+        printLNDebug(" success!");
 
         if (modem.isGprsConnected())
         {
-            SerialMon.println("GPRS connected!");
+            printLNDebug("GPRS connected!");
         }
         else
         {
@@ -323,10 +312,7 @@ void initSIM()
 #endif
         vTaskDelayUntil(&xLastWakeTime, 100);
 
-        digitalWrite(PIN_LED_VERDE, HIGH);
-        digitalWrite(PIN_LED_ROJO, LOW);
-
-        publishedCommunication = false;
+        publishedData = false;
     }
 }
 
@@ -342,19 +328,22 @@ boolean mqttConnect()
     }
     mqttReconnectAttempts++;
 
-    SerialMon.println("mqttConnect()...");
+    printLNDebug("mqttConnect()...");
 
-    boolean status = mqtt.connect(UNIT_GENERIC_ID);
+    String clientId = "esp32_";
+    clientId += String(random(0xffff), HEX);
+
+    boolean status = mqtt.connect(clientId.c_str());
 
     // Con autenticación
     //boolean status = mqtt.connect("GsmClientName", "mqtt_user", "mqtt_pass");
 
     if (status == false)
     {
-        SerialMon.println("mqttConnect() return false");
+        printLNDebug("mqttConnect() return false");
         return false;
     }
-    SerialMon.println("mqttConnect() return true");
+    printLNDebug("mqttConnect() return true");
 
     mqtt.subscribe(topicSub);
     return mqtt.connected();
@@ -365,7 +354,7 @@ boolean mqttConnect()
 // ==================================================
 void mqttCallback(char *topic, byte *payload, unsigned int len)
 {
-    SerialMon.println("mqttCallback()");
+    printLNDebug("mqttCallback()");
 
     unsigned int commas = 1;
 
@@ -394,7 +383,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
 
     for (uint8_t i = 0; i < commas; i++)
     {
-        SerialMon.println(payloadS[i]);
+        printLNDebug(payloadS[i]);
     }
 
     subscribeOrder(payloadS);
@@ -435,25 +424,30 @@ void subscribeOrder(String payloadS[])
 // ==================================================
 //  TODO MQTT. publicación
 //  Si el tiempo actual menos el tiempo de la ultima publicación es mayor o igual a la velocidad
-//  de envío, y si ha ocurrido un evento, se envían los datos
+//  de envío se envian los datos
+//  Los datos se envian siempre y cuando:
+//    - el tiempo actual menos el tiempo de la ultima publicación es mayor o igual a la velocidad
+//  de envío
+//    - Ha ocurrido un evento
+//    - El servidor los ha solicitado
 // ==================================================
 void publish()
 {
     long t = millis();
 
-    if (t - lastPublishData > PUBLISH_DATA_SPEED)
+    if (t - lastPublishCommunication > PUBLISH_COMMUNICATION_SPEED)
+    {
+        lastPublishCommunication = t;
+        publishedCommunication = false;
+    }
+
+    if (getEvent() == 1 && t - lastPublishData > PUBLISH_DATA_SPEED)
     {
         lastPublishData = t;
         publishedData = false;
     }
 
-    if (getEvent() == 1) // Siempre que ocure un evento se envía si o si el dato
-    {
-        publishedData = false;
-        setEvent(0);
-    }
-
-    if (!publishedData) // Y en caso de que exista una solicitud se envía también
+    if (!publishedData)
     {
         publishData();
     }
@@ -484,7 +478,7 @@ void publishCommunication()
 {
     const char *msg = "1";
     mqtt.publish(topicPub, msg);
-    SerialMon.println("¡publicado!");
+    printLNDebug("¡publicado!");
 }
 
 // ==================================================
@@ -500,6 +494,8 @@ void publishData()
     if (mqtt.publish(topicPub, payloadCharArray, retained))
     {
         publishedData = true;
+        setEvent(0);
+        printLNDebug("¡Datos enviados!");
     }
 }
 
@@ -513,7 +509,7 @@ void publishSIMData()
         String simOperator = modem.getOperator();
         String simSignal = (String)modem.getSignalQuality();
         String payloadString = "3," + simOperator + "," + simSignal;
-        SerialMon.println(payloadString);
+        printLNDebug(payloadString);
         char payload[payloadString.length()];
         payloadString.toCharArray(payload, payloadString.length() + 1);
         mqtt.publish(topicPub, payload);
@@ -525,11 +521,8 @@ void publishSIMData()
 // ==================================================
 void readOrders(String payload[])
 {
-    /* if (payload[1])
-    {
-        String order1 = payload[1];
-    } */
-    SerialMon.println("¡ordenes recibidas!");
+    // Nada que hacer
+    printLNDebug("¡ordenes recibidas!");
 }
 
 // ==================================================
@@ -539,12 +532,12 @@ void readSendSpeed(String payload[])
 {
     if (payload[1] != nullptr && payload[1] != "")
     {
-        PUBLISH_DATA_SPEED = payload[1].toInt();
-        SerialMon.println("¡configuración de tiempo de envio recibida!");
+        PUBLISH_COMMUNICATION_SPEED = payload[1].toInt();
+        printLNDebug("¡configuración de tiempo de envio recibida!");
     }
     else
     {
-        SerialMon.println("¡configuración de tiempo de envio recibida INCORRECTA!");
+        printLNDebug("¡configuración de tiempo de envio recibida INCORRECTA!");
     }
     // guardar en EEPROM
 }
@@ -554,7 +547,7 @@ void readSendSpeed(String payload[])
 // ==================================================
 void publishSendSpeed()
 {
-    String payloadString = "8," + (String)PUBLISH_DATA_SPEED;
+    String payloadString = "8," + (String)PUBLISH_COMMUNICATION_SPEED;
     char payloadCharArray[payloadString.length()];
     payloadString.toCharArray(payloadCharArray, payloadString.length() + 1);
     mqtt.publish(topicPub, payloadCharArray);
@@ -569,10 +562,10 @@ void readConfiguration(String payload[])
     if (payload[1] != nullptr && payload[1] != "")
     {
         setLectura(payload[1].toInt());
-        SerialMon.println("¡configuración recibida!");
+        printLNDebug("¡configuración recibida!");
     }
     else
     {
-        SerialMon.println("¡configuración recibida INCORRECTA!");
+        printLNDebug("¡configuración recibida INCORRECTA!");
     }
 }

@@ -1,24 +1,28 @@
 #include <EEPROM.h>
-#include "../main.h"
+#include "../debugger/debugger.h"
+#include "../sensors/sensors.h"
 
 // ==================================================
 //  Memoria FLASH
 // ==================================================
-uint8_t FLASH_SIZE = 50;
-uint8_t P1_FLASH_POSITION = 0;
+int FLASH_SIZE = 50;
+int POS_LECTURA = 0;
 
-uint32_t readLectura()
+void readDataFromFlash();
+
+void setupSave()
 {
     EEPROM.begin(FLASH_SIZE);
-    uint32_t lectura = EEPROM.readLong(0);
-    return lectura;
+    readDataFromFlash();
 }
 
-void saveLectura(uint32_t lectura)
+void readDataFromFlash()
 {
-    SerialMon.println("save core: " + (String)xPortGetCoreID());
-    EEPROM.begin(FLASH_SIZE);
-    EEPROM.writeLong(P1_FLASH_POSITION, lectura);
+    setLectura(EEPROM.readLong(POS_LECTURA));
+}
+
+void saveDataOnFlash()
+{
+    EEPROM.writeLong(POS_LECTURA, getLectura());
     EEPROM.commit();
-    EEPROM.end();
 }
