@@ -30,7 +30,7 @@ void runTaskSIM(void *pvParameters)
     printLNDebug("runTaskSIM running on core: " + (String)xPortGetCoreID());
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xFrequency = 100;
+    const TickType_t xFrequency = 13;
 
     setupSIM(xLastWakeTime);
     vTaskDelayUntil(&xLastWakeTime, xFrequency);

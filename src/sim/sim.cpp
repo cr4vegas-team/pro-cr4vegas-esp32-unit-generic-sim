@@ -101,8 +101,8 @@ PubSubClient mqtt(client);
 //      - ID cliente en el servidor MQTT
 // ==================================================
 const char *broker = "emqx.rubenfgr.com";
-const char *topicSub = "s/u/g/2"; // server/unit/hydrant/id
-const char *topicPub = "n/u/g/2"; // node/unit/hydrant/id
+const char *topicSub = "s/u/s/2"; // server/unit/station/id
+const char *topicPub = "n/u/s/2"; // node/unit/station/id
 
 // ==================================================
 // TODO Constantes
@@ -226,24 +226,22 @@ void initSIM()
         printLNDebug("initSIM() --> wait...");
 
         digitalWrite(PIN_RESET_SIM, LOW);
-        vTaskDelayUntil(&xLastWakeTime, 5000);
+        vTaskDelayUntil(&xLastWakeTime, 3000);
 
         // Set GSM module baud rate
         //TinyGsmAutoBaud(SerialAT, GSM_AUTOBAUD_MIN, GSM_AUTOBAUD_MAX);
         //SerialAT.begin(115200, SERIAL_8N1, 16, 17, false);
         SerialAT.begin(9600);
-        vTaskDelayUntil(&xLastWakeTime, 5000);
+        vTaskDelayUntil(&xLastWakeTime, 6000);
 
         digitalWrite(PIN_RESET_SIM, HIGH);
 
-        vTaskDelayUntil(&xLastWakeTime, 2000);
-
         printLNDebug("modem.init()...");
 
-        if (!modem.init())
+        if (!modem.restart())
         {
             printLNDebug("ERROR!");
-            setupSIM(xLastWakeTime);
+            initSIM();
         }
         printLNDebug("OK!");
         vTaskDelayUntil(&xLastWakeTime, 100);
@@ -280,7 +278,6 @@ void initSIM()
             initSIM();
         }
         printLNDebug(" success!");
-        vTaskDelayUntil(&xLastWakeTime, 100);
 
         if (modem.isNetworkConnected())
         {
@@ -310,7 +307,6 @@ void initSIM()
             initSIM();
         }
 #endif
-        vTaskDelayUntil(&xLastWakeTime, 100);
 
         publishedData = false;
     }
@@ -447,6 +443,12 @@ void publish()
         publishedData = false;
     }
 
+    if (getEventCaudal() == 1)
+    {
+        lastPublishData = t;
+        publishedData = false;
+    }
+
     if (!publishedData)
     {
         publishData();
@@ -495,6 +497,7 @@ void publishData()
     {
         publishedData = true;
         setEvent(0);
+        setEventCaudal(0);
         printLNDebug("¡Datos enviados!");
     }
 }

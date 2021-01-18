@@ -9,5 +9,7 @@ void setLectura(uint32_t lecturaP);
 double getCaudal();
 
 int getEvent();
+int getEventCaudal();
 void setEvent(int eventP);
+void setEventCaudal(int eventCaudalP);
 int getSaving();

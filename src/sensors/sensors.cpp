@@ -6,6 +6,7 @@
 long lectura = 0;
 float caudal = 0;
 int event = 0;
+int eventCaudal = 0;
 
 void setupSensors()
 {
@@ -14,7 +15,7 @@ void setupSensors()
 
 void loopSensors()
 {
-    loopContador(lectura, caudal, event);
+    loopContador(lectura, caudal, event, eventCaudal);
 }
 
 uint32_t getLectura()
@@ -38,7 +39,17 @@ int getEvent()
     return event;
 }
 
+int getEventCaudal()
+{
+    return eventCaudal;
+}
+
 void setEvent(int eventP)
 {
     event = eventP;
+}
+
+void setEventCaudal(int eventcaudalP)
+{
+    eventCaudal = eventcaudalP;
 }
